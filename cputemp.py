@@ -26,9 +26,10 @@ import dbus
 from advertisement import Advertisement
 from service import Application, Service, Characteristic, Descriptor
 from gpiozero import CPUTemperature
-
+import base64 as b64
+import random
 GATT_CHRC_IFACE = "org.bluez.GattCharacteristic1"
-NOTIFY_TIMEOUT = 5000
+NOTIFY_TIMEOUT = 1000
 
 class ThermometerAdvertisement(Advertisement):
     def __init__(self, index):
@@ -37,7 +38,7 @@ class ThermometerAdvertisement(Advertisement):
         self.include_tx_power = True
 
 class ThermometerService(Service):
-    THERMOMETER_SVC_UUID = "00000001-710e-4a5b-8d75-3e5b444bc3cf"
+    THERMOMETER_SVC_UUID = "19b10000-e8f2-537e-4f6c-d104768a1214"
 
     def __init__(self, index):
         self.farenheit = True
@@ -53,7 +54,7 @@ class ThermometerService(Service):
         self.farenheit = farenheit
 
 class TempCharacteristic(Characteristic):
-    TEMP_CHARACTERISTIC_UUID = "00000002-710e-4a5b-8d75-3e5b444bc3cf"
+    TEMP_CHARACTERISTIC_UUID = "19b10001-e8f2-537e-4f6c-d104768a1217"
 
     def __init__(self, service):
         self.notifying = False
@@ -69,25 +70,29 @@ class TempCharacteristic(Characteristic):
 
         cpu = CPUTemperature()
         temp = cpu.temperature
-        if self.service.is_farenheit():
-            temp = (temp * 1.8) + 32
-            unit = "F"
-
-        strtemp = str(round(temp, 1)) + " " + unit
-        for c in strtemp:
-            value.append(dbus.Byte(c.encode()))
-
-        return value
+        # if self.service.is_farenheit():
+        #     temp = (temp * 1.8) + 32
+        #     unit = "F"
+        color = random.randint(1, 3)
+        if(color == 1):
+            value = 'B'
+        elif(color ==2):
+            value= 'R'
+        elif(color == 3):
+            value = 'G'          
+        return [dbus.Byte(ord(value))]
 
     def set_temperature_callback(self):
         if self.notifying:
             value = self.get_temperature()
+            print("Sending : ", value)
             self.PropertiesChanged(GATT_CHRC_IFACE, {"Value": value}, [])
 
         return self.notifying
 
     def StartNotify(self):
         if self.notifying:
+            print("Start Notiying")
             return
 
         self.notifying = True
@@ -173,6 +178,8 @@ app.register()
 
 adv = ThermometerAdvertisement(0)
 adv.register()
+
+
 
 try:
     app.run()
