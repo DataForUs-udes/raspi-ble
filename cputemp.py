@@ -22,14 +22,14 @@ SOFTWARE.
 """
 
 import dbus
-
+import random
 from advertisement import Advertisement
 from service import Application, Service, Characteristic, Descriptor
 from gpiozero import CPUTemperature
-import base64 as b64
-import random
+ 
+
 GATT_CHRC_IFACE = "org.bluez.GattCharacteristic1"
-NOTIFY_TIMEOUT = 1000
+NOTIFY_TIMEOUT = 2000
 
 class ThermometerAdvertisement(Advertisement):
     def __init__(self, index):
@@ -70,29 +70,29 @@ class TempCharacteristic(Characteristic):
 
         cpu = CPUTemperature()
         temp = cpu.temperature
-        # if self.service.is_farenheit():
-        #     temp = (temp * 1.8) + 32
-        #     unit = "F"
-        color = random.randint(1, 3)
-        if(color == 1):
-            value = 'B'
-        elif(color ==2):
-            value= 'R'
-        elif(color == 3):
-            value = 'G'          
-        return [dbus.Byte(ord(value))]
+        if self.service.is_farenheit():
+            temp = (temp * 1.8) + 32
+            unit = "F"
+
+        randInt = random.randint(1,3)
+        if   randInt == 1:
+            color = 'B'
+        elif randInt ==2:
+            color ='R'
+        elif randInt ==3:
+            color ='G'        
+
+        return [dbus.Byte(ord(color))]
 
     def set_temperature_callback(self):
         if self.notifying:
             value = self.get_temperature()
-            print("Sending : ", value)
             self.PropertiesChanged(GATT_CHRC_IFACE, {"Value": value}, [])
 
         return self.notifying
 
     def StartNotify(self):
         if self.notifying:
-            print("Start Notiying")
             return
 
         self.notifying = True
@@ -178,8 +178,6 @@ app.register()
 
 adv = ThermometerAdvertisement(0)
 adv.register()
-
-
 
 try:
     app.run()
