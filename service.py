@@ -22,11 +22,13 @@ SOFTWARE.
 import dbus
 import dbus.mainloop.glib
 import dbus.exceptions
+import dbus.types
 try:
   from gi.repository import GObject
 except ImportError:
     import gobject as GObject
 from bletools import BleTools
+
 
 BLUEZ_SERVICE_NAME = "org.bluez"
 GATT_MANAGER_IFACE = "org.bluez.GattManager1"
@@ -88,6 +90,7 @@ class Application(dbus.service.Object):
         service_manager = dbus.Interface(
                 self.bus.get_object(BLUEZ_SERVICE_NAME, adapter),
                 GATT_MANAGER_IFACE)
+        
 
         service_manager.RegisterApplication(self.get_path(), {},
                 reply_handler=self.register_app_callback,

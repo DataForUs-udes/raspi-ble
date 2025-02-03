@@ -10,7 +10,7 @@ MAX_PACKET_SIZE = 150     # Taille max d'un paquet BLE
 # Variables globales pour la gestion des paquets JSON
 json_packets = []
 json_index = 0
-
+prev_value = 0
 def load_json_file():
     """Charge et divise le fichier JSON en paquets."""
     global json_packets, json_index
@@ -46,24 +46,26 @@ class JsonAdvertisement(Advertisement):
         self.include_tx_power = True
 
 class JsonService(Service):
-    JSON_SVC_UUID = "00000010-710e-4a5b-8d75-3e5b444bc3cf"
+    JSON_SVC_UUID = "19b10000-e8f2-537e-4f6c-d104768a1214"
 
     def __init__(self, index):
         Service.__init__(self, index, self.JSON_SVC_UUID, True)
         self.add_characteristic(JsonCharacteristic(self))
 
 class JsonCharacteristic(Characteristic):
-    JSON_CHARACTERISTIC_UUID = "00000011-710e-4a5b-8d75-3e5b444bc3cf"
-
+    JSON_CHARACTERISTIC_UUID = "19b10001-e8f2-537e-4f6c-d104768a1217"
     def __init__(self, service):
         Characteristic.__init__(self, self.JSON_CHARACTERISTIC_UUID, ["notify", "read"], service)
         self.notifying = False
         self.add_descriptor(JsonDescriptor(self))
+        self.prev_value = 0
 
     def set_json_callback(self):
         if self.notifying:
             value = get_next_json_packet()
-            self.PropertiesChanged(GATT_CHRC_IFACE, {"Value": value}, [])
+            if value != self.prev_value and value != 0xFF:
+                self.PropertiesChanged(GATT_CHRC_IFACE, {"Value": value}, [])
+                self.prev_value = value
         return self.notifying
 
     def StartNotify(self):
