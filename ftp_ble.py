@@ -1,38 +1,118 @@
 import dbus
 import dbus.mainloop.glib
+import logging
 from gi.repository import GLib
 from advertisement import Advertisement
 from service import Application, Service, Characteristic, Descriptor
 
 GATT_CHRC_IFACE = "org.bluez.GattCharacteristic1"
-NOTIFY_TIMEOUT = 55  # Temps en millisecondes (5 secondes)
-MAX_PACKET_SIZE = 150  # Taille max d'un paquet BLE
+NOTIFY_TIMEOUT = 500  # Temps en millisecondes (secondes)
+MAX_PACKET_SIZE = 185  # Taille max d'un paquet BLE
+SERVICE_NAME = "org.bluez"
+AGENT_IFACE = SERVICE_NAME + '.Agent1'
+ADAPTER_IFACE = SERVICE_NAME + ".Adapter1"
+DEVICE_IFACE = SERVICE_NAME + ".Device1"
+
+
+LOG_LEVEL = logging.INFO
+#LOG_FILE = "/var/log/syslog"
+LOG_LEVEL = logging.DEBUG
+LOG_FILE = "/dev/stdout"
+LOG_FORMAT = "%(asctime)s %(levelname)s [%(module)s] %(message)s"
 
 # Variables globales pour la gestion des paquets JSON
 json_packets = []
 json_index = 0
 
-class Agent(dbus.service.Object):
-    AGENT_INTERFACE = 'org.bluez.Agent1'
+def getManagedObjects():
+    bus = dbus.SystemBus()
+    manager = dbus.Interface(bus.get_object("org.bluez", "/"), "org.freedesktop.DBus.ObjectManager")
+    return manager.GetManagedObjects()
 
-    def __init__(self, bus, path):
-        dbus.service.Object.__init__(self, bus, path)
 
-    @dbus.service.method(AGENT_INTERFACE, in_signature="ou", out_signature="")
+def findAdapter():
+    objects = getManagedObjects();
+    bus = dbus.SystemBus()
+    for path, ifaces in objects.items():
+        adapter = ifaces.get(ADAPTER_IFACE)
+        if adapter is None:
+            continue
+        obj = bus.get_object(SERVICE_NAME, path)
+        return dbus.Interface(obj, ADAPTER_IFACE)
+    raise Exception("Bluetooth adapter not found")
+
+class BlueAgent(dbus.service.Object):
+    AGENT_PATH = "/blueagent5/agent"
+    CAPABILITY = "KeyboardDisplay"
+    pin_code = None
+
+    def __init__(self, pin_code):
+        dbus.service.Object.__init__(self, dbus.SystemBus(), BlueAgent.AGENT_PATH)
+        self.pin_code = pin_code
+
+        logging.basicConfig(filename=LOG_FILE, format=LOG_FORMAT, level=LOG_LEVEL)
+        logging.info("Starting BlueAgent with PIN [{}]".format(self.pin_code))
+        
+    @dbus.service.method(AGENT_IFACE, in_signature="os", out_signature="")
+    def DisplayPinCode(self, device, pincode):
+        logging.debug("BlueAgent DisplayPinCode invoked")
+
+    @dbus.service.method(AGENT_IFACE, in_signature="ouq", out_signature="")
+    def DisplayPasskey(self, device, passkey, entered):
+        logging.debug("BlueAgent DisplayPasskey invoked")
+
+    @dbus.service.method(AGENT_IFACE, in_signature="o", out_signature="s")
+    def RequestPinCode(self, device):
+        logging.info("BlueAgent is pairing with device [{}]".format(device))
+        self.trustDevice(device)
+        return self.pin_code
+
+    @dbus.service.method(AGENT_IFACE, in_signature="ou", out_signature="")
     def RequestConfirmation(self, device, passkey):
-        print(f"Approbation automatique du code de confirmation : {passkey}")
+        """Always confirm"""
+        logging.info("BlueAgent is pairing with device [{}]".format(device))
+        self.trustDevice(device)
         return
 
-
-    @dbus.service.method(AGENT_INTERFACE, in_signature="os", out_signature="")
+    @dbus.service.method(AGENT_IFACE, in_signature="os", out_signature="")
     def AuthorizeService(self, device, uuid):
-        print(f"Autorisation automatique pour le service UUID : {uuid}")
+        """Always authorize"""
+        logging.debug("BlueAgent AuthorizeService method invoked")
         return
 
+    @dbus.service.method(AGENT_IFACE, in_signature="o", out_signature="u")
+    def RequestPasskey(self, device):
+        logging.debug("RequestPasskey returns 0")
+        return dbus.UInt32(0)
 
-    @dbus.service.method(AGENT_INTERFACE, in_signature="", out_signature="")
-    def Release(self):
-        print("Agent libéré.")
+    @dbus.service.method(AGENT_IFACE, in_signature="o", out_signature="")
+    def RequestAuthorization(self, device):
+        """Always authorize"""
+        logging.info("BlueAgent is authorizing device [{}]".format(self.device))
+        return
+
+    @dbus.service.method(AGENT_IFACE, in_signature="", out_signature="")
+    def Cancel(self):
+        logging.info("BlueAgent pairing request canceled from device [{}]".format(self.device))
+
+    def trustDevice(self, path):
+        bus = dbus.SystemBus()
+        device_properties = dbus.Interface(bus.get_object(SERVICE_NAME, path), "org.freedesktop.DBus.Properties")
+        device_properties.Set(DEVICE_IFACE, "Trusted", True)
+
+    def registerAsDefault(self):
+        bus = dbus.SystemBus()
+        manager = dbus.Interface(bus.get_object(SERVICE_NAME, "/org/bluez"), "org.bluez.AgentManager1")
+        manager.RegisterAgent(BlueAgent.AGENT_PATH, BlueAgent.CAPABILITY)
+        manager.RequestDefaultAgent(BlueAgent.AGENT_PATH)
+
+    def startPairing(self):
+        bus = dbus.SystemBus()
+        adapter_path = findAdapter().object_path
+        adapter = dbus.Interface(bus.get_object(SERVICE_NAME, adapter_path), "org.freedesktop.DBus.Properties")
+#        adapter.Set(ADAPTER_IFACE, "Discoverable", True)
+        
+        logging.info("BlueAgent is waiting to pair with device")
 
 def load_json_file():
     """Charge et divise le fichier JSON en paquets."""
@@ -82,11 +162,15 @@ class JsonCharacteristic(Characteristic):
         Characteristic.__init__(self, self.JSON_CHARACTERISTIC_UUID, ["notify", "read"], service)
         self.notifying = False
         self.add_descriptor(JsonDescriptor(self))
+        self.prev_value = 0
 
     def set_json_callback(self):
         if self.notifying:
             value = get_next_json_packet()
-            self.PropertiesChanged(GATT_CHRC_IFACE, {"Value": value}, [])
+            if value != self.prev_value and value != 0xFF:
+                self.PropertiesChanged(GATT_CHRC_IFACE, {"Value": value}, [])
+                self.add_timeout(NOTIFY_TIMEOUT, self.set_json_callback)
+                self.prev_value = value
         return self.notifying
 
     def StartNotify(self):
@@ -95,10 +179,13 @@ class JsonCharacteristic(Characteristic):
 
         print("Début du transfert du fichier JSON")
         load_json_file()  # Recharge le fichier avant de commencer
-        self.notifying = True
         value = get_next_json_packet()
-        self.PropertiesChanged(GATT_CHRC_IFACE, {"Value": value}, [])
-        self.add_timeout(NOTIFY_TIMEOUT, self.set_json_callback)
+        self.notifying = True
+        
+        
+        #self.PropertiesChanged(GATT_CHRC_IFACE, {"Value": value}, [])
+        #self.add_timeout(NOTIFY_TIMEOUT, self.set_json_callback)
+        self.set_json_callback()
 
     def StopNotify(self):
         print("Arrêt du transfert du fichier JSON")
@@ -106,6 +193,9 @@ class JsonCharacteristic(Characteristic):
 
     def ReadValue(self, options):
         return get_next_json_packet()
+
+
+
 
 class JsonDescriptor(Descriptor):
     JSON_DESCRIPTOR_UUID = "2901"
@@ -172,16 +262,18 @@ system_bus.add_signal_receiver(device_event,
                                dbus_interface="org.freedesktop.DBus.Properties",
                                signal_name="PropertiesChanged",
                                path_keyword="path")
-set_adapter_pairable()
+#set_adapter_pairable()
 dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
 bus = dbus.SystemBus()
-
-agent = Agent(bus, "/test/agent")
-agent_manager = dbus.Interface(bus.get_object("org.bluez", "/org/bluez"),
+pin_code = "12345"
+agent = BlueAgent(pin_code)
+agent.registerAsDefault()
+agent.startPairing()
+'''agent_manager = dbus.Interface(bus.get_object("org.bluez", "/org/bluez"),
                                "org.bluez.AgentManager1")
 
 agent_manager.RegisterAgent("/test/agent", "DisplayYesNo")
-agent_manager.RequestDefaultAgent("/test/agent")
+agent_manager.RequestDefaultAgent("/test/agent")'''
 # ====================== Application BLE ======================
 app = Application()
 app.add_service(JsonService(0))
