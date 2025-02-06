@@ -17,11 +17,19 @@ class Agent(dbus.service.Object):
 
     def __init__(self, bus, path):
         dbus.service.Object.__init__(self, bus, path)
+    
+    @dbus.service.method("org.bluez.Agent1", in_signature="ou", out_signature="u")
+    def RequestPasskey(self, device,passkey):
+        print(f"Demande de code PIN pour {device}")
+        #passkey = 123456  # Code PIN pour tests
+        #return dbus.UInt32(passkey)
+        return passkey
 
-    @dbus.service.method(AGENT_INTERFACE, in_signature="ou", out_signature="")
+
+    @dbus.service.method("org.bluez.Agent1", in_signature="ou", out_signature="")
     def RequestConfirmation(self, device, passkey):
-        print(f"Approbation automatique du code de confirmation : {passkey}")
-        return
+        print(f"Confirmation du code PIN {passkey} pour {device}")
+        return  # Acceptation automatique
 
 
     @dbus.service.method(AGENT_INTERFACE, in_signature="os", out_signature="")
@@ -29,6 +37,10 @@ class Agent(dbus.service.Object):
         print(f"Autorisation automatique pour le service UUID : {uuid}")
         return
 
+    @dbus.service.method(AGENT_INTERFACE,in_signature="o",out_signature="")
+    def RequestAuthorization(self,device):
+        print(f"Authorization automatique pour : {device}")
+        return
 
     @dbus.service.method(AGENT_INTERFACE, in_signature="", out_signature="")
     def Release(self):
@@ -89,16 +101,40 @@ class JsonCharacteristic(Characteristic):
             self.PropertiesChanged(GATT_CHRC_IFACE, {"Value": value}, [])
         return self.notifying
 
+    def attempt_start_notify(self):
+        # This function is repeatedly called until bonding is complete.
+        if is_any_device_bonded():
+            print("🔐 Bonding complete. Starting JSON file transfer.")
+            try:
+                mtu = dbus.UInt16(180)
+                print(f"🛠️ Setting MTU to {mtu}")
+                self.PropertiesChanged(GATT_CHRC_IFACE, {"MTU": mtu}, [])
+            except Exception as e:
+                print(f"⚠️ Failed to set MTU: {e}")
+            load_json_file()  # Reload the file (or start fresh)
+            self.notifying = True
+            value = get_next_json_packet()
+            self.PropertiesChanged(GATT_CHRC_IFACE, {"Value": value}, [])
+            # Start the periodic notifications
+            self.add_timeout(NOTIFY_TIMEOUT, self.set_json_callback)
+            # Returning False stops the GLib timeout callback.
+            return False
+        else:
+            print("⌛ Waiting for bonding to complete before starting transfer...")
+            # Returning True keeps the timeout callback active.
+            return True
+
     def StartNotify(self):
         if self.notifying:
             return
 
-        print("Début du transfert du fichier JSON")
-        load_json_file()  # Recharge le fichier avant de commencer
-        self.notifying = True
-        value = get_next_json_packet()
-        self.PropertiesChanged(GATT_CHRC_IFACE, {"Value": value}, [])
-        self.add_timeout(NOTIFY_TIMEOUT, self.set_json_callback)
+        print("Début de la procédure de notification: vérification du bonding...")
+        if is_any_device_bonded():
+            # Bonding is already complete; start transfer immediately.
+            self.attempt_start_notify()
+        else:
+            # Bonding not complete – check again every second.
+            GLib.timeout_add(1000, self.attempt_start_notify)
 
     def StopNotify(self):
         print("Arrêt du transfert du fichier JSON")
@@ -163,6 +199,21 @@ def set_adapter_pairable():
         print(f"Erreur lors de la configuration de l'adaptateur : {e.get_dbus_message()}")
 
 
+def is_any_device_bonded():
+    bus = dbus.SystemBus()
+    manager = dbus.Interface(
+        bus.get_object("org.bluez", "/"),
+        "org.freedesktop.DBus.ObjectManager"
+    )
+    objects = manager.GetManagedObjects()
+    for path, interfaces in objects.items():
+        if "org.bluez.Device1" in interfaces:
+            device = interfaces["org.bluez.Device1"]
+            if device.get("Connected", False) and device.get("Paired", False):
+                return True
+    return False
+ 
+
 # Initialisation du bus D-Bus pour écouter les signaux
 dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
 system_bus = dbus.SystemBus()
@@ -176,12 +227,12 @@ set_adapter_pairable()
 dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
 bus = dbus.SystemBus()
 
-agent = Agent(bus, "/test/agent")
+agent = Agent(bus, "/org/bluez/agent")
 agent_manager = dbus.Interface(bus.get_object("org.bluez", "/org/bluez"),
                                "org.bluez.AgentManager1")
 
-agent_manager.RegisterAgent("/test/agent", "DisplayYesNo")
-agent_manager.RequestDefaultAgent("/test/agent")
+agent_manager.RegisterAgent("/org/bluez/agent", "NoInputNoOutput")
+agent_manager.RequestDefaultAgent("/org/bluez/agent")
 # ====================== Application BLE ======================
 app = Application()
 app.add_service(JsonService(0))
