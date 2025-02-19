@@ -1,6 +1,9 @@
 import dbus
 import dbus.mainloop.glib
 import logging
+import datetime
+import base64
+import struct
 from gi.repository import GLib
 from advertisement import Advertisement
 from service import Application, Service, Characteristic, Descriptor
@@ -125,11 +128,11 @@ def load_json_file():
 
         # Découpe en paquets de taille MAX_PACKET_SIZE
         json_packets = [data[i:i + MAX_PACKET_SIZE] for i in range(0, len(data), MAX_PACKET_SIZE)]
-        json_packets.append("\xFF")  # Marqueur de fin de fichier
+        json_packets.append("FIN")  # Marqueur de fin de fichier
         print(f"Fichier JSON chargé ({len(json_packets)} paquets)")
     except Exception as e:
         print(f"Erreur lors du chargement du fichier JSON: {e}")
-        json_packets = ["\xFF"]  # Si erreur, on envoie juste la fin
+        json_packets = ["ERR"]  # Si erreur, on envoie juste la fin
 
 def get_next_json_packet():
     """Renvoie le prochain paquet JSON et met à jour l'index global."""
@@ -138,7 +141,7 @@ def get_next_json_packet():
         value = json_packets[json_index]
         json_index += 1
     else:
-        value = "\xFF"  # Sécurité : envoie toujours la fin si dépassement
+        value = "FIN"  # Sécurité : envoie toujours la fin si dépassement
 
     return [dbus.Byte(ord(c)) for c in value]
 
@@ -154,6 +157,7 @@ class JsonService(Service):
     def __init__(self, index):
         Service.__init__(self, index, self.JSON_SVC_UUID, True)
         self.add_characteristic(JsonCharacteristic(self))
+        self.add_characteristic(DelFileFrom(self))
 
 class JsonCharacteristic(Characteristic):
     JSON_CHARACTERISTIC_UUID = "19b10001-e8f2-537e-4f6c-d104768a1217"
@@ -167,7 +171,7 @@ class JsonCharacteristic(Characteristic):
     def set_json_callback(self):
         if self.notifying:
             value = get_next_json_packet()
-            if value != self.prev_value and value != 0xFF:
+            if value != self.prev_value and value != 'FIN':
                 self.PropertiesChanged(GATT_CHRC_IFACE, {"Value": value}, [])
                 self.add_timeout(NOTIFY_TIMEOUT, self.set_json_callback)
                 self.prev_value = value
@@ -194,7 +198,65 @@ class JsonCharacteristic(Characteristic):
     def ReadValue(self, options):
         return get_next_json_packet()
 
+from gi.repository import GLib
+import struct
 
+class DelFileFrom(Characteristic):
+    UUID = "19b10001-e8f2-537e-4f6c-d104768a1221"  # Remplace par ton propre UUID
+
+    def __init__(self, service):
+        Characteristic.__init__(
+            self, self.UUID,
+            ["write","write-without-response"],  # Cette caractéristique accepte l'écriture
+            service
+        )
+
+    def WriteValue(self, value, options):
+        print("Receiving data from phone")
+        print("raw value : ", value)
+        byte_list = bytes(value)
+        byte_str = byte_list.decode('utf-8')  # Convertir en chaîne de caractères ASCII (si c'est du texte)
+
+        try:
+            # Vérifier si les données reçues sont bien des chiffres
+            print(f"String reçu : {byte_str}")
+            
+            # Si c'est un timestamp en texte (par exemple "1739206948381")
+            timestamp = int(byte_str)
+            timestamp_seconds = timestamp / 1000
+            dt_object = datetime.datetime.fromtimestamp(timestamp_seconds)
+            print(f"📥 Timestamp reçu : {dt_object.strftime('%Y-%m-%d %H:%M:%S')}")
+
+        except ValueError as e:
+            print(f"⚠️ Erreur lors de la conversion du timestamp : {e}")
+class ReceiveConfirmation(Characteristic):
+    UUID = "19b10001-e8f2-537e-4f6c-d104768a1218"  # Remplace par ton propre UUID
+
+    def __init__(self, service):
+        Characteristic.__init__(
+            self, self.UUID,
+            ["write","write-without-response"],  # Cette caractéristique accepte l'écriture
+            service
+        )
+
+    def WriteValue(self, value, options):
+        print("Receiving data from phone")
+        print("raw value : ", value)
+        byte_list = bytes(value)
+        byte_str = byte_list.decode('utf-8')  # Convertir en chaîne de caractères ASCII (si c'est du texte)
+
+        try:
+            # Vérifier si les données reçues sont bien des chiffres
+            print(f"String reçu : {byte_str}")
+            
+            # Si c'est un timestamp en texte (par exemple "1739206948381")
+            timestamp = int(byte_str)
+            timestamp_seconds = timestamp / 1000
+            dt_object = datetime.datetime.fromtimestamp(timestamp_seconds)
+            print(f"📥 Timestamp reçu : {dt_object.strftime('%Y-%m-%d %H:%M:%S')}")
+
+        except ValueError as e:
+            print(f"⚠️ Erreur lors de la conversion du timestamp : {e}")
 
 
 class JsonDescriptor(Descriptor):
