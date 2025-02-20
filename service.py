@@ -89,7 +89,6 @@ class Application(dbus.service.Object):
         service_manager = dbus.Interface(
                 self.bus.get_object(BLUEZ_SERVICE_NAME, adapter),
                 GATT_MANAGER_IFACE)
-        
 
         service_manager.RegisterApplication(self.get_path(), {},
                 reply_handler=self.register_app_callback,
