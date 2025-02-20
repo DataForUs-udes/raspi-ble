@@ -1,6 +1,5 @@
 import dbus
 import dbus.mainloop.glib
-from gi.repository import GLib
 from advertisement import Advertisement
 from service import Application
 from agent import BlueAgent
