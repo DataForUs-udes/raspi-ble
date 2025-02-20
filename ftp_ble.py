@@ -1,25 +1,12 @@
 import dbus
 import dbus.mainloop.glib
-import logging
-import datetime
-import base64
-import struct
 from gi.repository import GLib
 from advertisement import Advertisement
-from service import Application, Service, Characteristic, Descriptor
+from service import Application
 from agent import BlueAgent
 from bleevents import device_event,get_disconnect_reason,set_adapter_pairable
-from bleprofile import *
-GATT_CHRC_IFACE = "org.bluez.GattCharacteristic1"
-NOTIFY_TIMEOUT = 500  # Temps en millisecondes (secondes)
+from bleprofile import JsonAdvertisement, JsonService
 
-
-
-LOG_LEVEL = logging.INFO
-#LOG_FILE = "/var/log/syslog"
-LOG_LEVEL = logging.DEBUG
-LOG_FILE = "/dev/stdout"
-LOG_FORMAT = "%(asctime)s %(levelname)s [%(module)s] %(message)s"
 
 # ================== Setting up the bus ===================
 # Initialisation of D-Bus to listen on hci0
@@ -37,7 +24,7 @@ agent = BlueAgent(pin_code)
 agent.registerAsDefault()
 agent.startPairing()
 
-# ====================== Application BLE ======================
+# ====================== BLE Application ======================
 app = Application()
 app.add_service(JsonService(0))
 app.register()

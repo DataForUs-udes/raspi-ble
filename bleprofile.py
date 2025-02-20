@@ -2,7 +2,6 @@ from gi.repository import GLib
 from advertisement import Advertisement
 from service import Application, Service, Characteristic, Descriptor
 from jsonutils import load_json_file, get_next_json_packet
-import logging
 import sys
 db_path = "/home/pi/StanForD-Parser/utils"
 sys.path.append(db_path)
@@ -37,14 +36,8 @@ class JsonCharacteristic(Characteristic):
         self.add_descriptor(JsonDescriptor(self))
         self.files_to_send = []
         self.current_file = None
-        self.refresh_file_list()
         self.recheck_timer = None
         self.prev_value = 0
-
-
-    def self.refresh_file_list(self):
-        ''' query on the bd to get all files to be sent (status == local) '''
-        self.files
 
     def set_json_callback(self):
         if self.notifying:
