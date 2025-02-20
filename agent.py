@@ -17,8 +17,6 @@ def getManagedObjects():
     bus = dbus.SystemBus()
     manager = dbus.Interface(bus.get_object("org.bluez", "/"), "org.freedesktop.DBus.ObjectManager")
     return manager.GetManagedObjects()
-
-
 def findAdapter():
     objects = getManagedObjects();
     bus = dbus.SystemBus()
