@@ -1,13 +1,13 @@
 import dbus
 
-# Variables globales pour la gestion des paquets JSON
-MAX_PACKET_SIZE = 185  # Taille max d'un paquet BLE
+# Global variables to manage JSON packets
+MAX_PACKET_SIZE = 185  # Max size of BLE packet
 json_packets = []
 json_index = 0
 
 
 def load_json_file():
-    """Charge et divise le fichier JSON en paquets."""
+    """Load and split the JSON file."""
     global json_packets, json_index
     json_index = 0
 
@@ -15,21 +15,21 @@ def load_json_file():
         with open("json_test.json", "r") as file:
             data = file.read()
 
-        # Découpe en paquets de taille MAX_PACKET_SIZE
+        # Slicing in MAX_SIZE packets
         json_packets = [data[i:i + MAX_PACKET_SIZE] for i in range(0, len(data), MAX_PACKET_SIZE)]
-        json_packets.append("END")  # Marqueur de fin de fichier
-        print(f"Fichier JSON chargé ({len(json_packets)} paquets)")
+        json_packets.append("END")  # Setting the end of a file 
+        print(f"Json file loaded in  ({len(json_packets)} packets)")
     except Exception as e:
-        print(f"Erreur lors du chargement du fichier JSON: {e}")
-        json_packets = ["ERR"]  # Si erreur, on envoie juste la fin
+        print(f"Error while loading the file : {e}")
+        json_packets = ["ERR"]  # If error in the file, we sent only ERR
 
 def get_next_json_packet():
-    """Renvoie le prochain paquet JSON et met à jour l'index global."""
+    """Send the next paquet and update the global index"""
     global json_index
     if json_index < len(json_packets):
         value = json_packets[json_index]
         json_index += 1
     else:
-        value = "END"  # Sécurité : envoie toujours la fin si dépassement
+        value = "END"  # Security : send END if we overflow
 
     return [dbus.Byte(ord(c)) for c in value]

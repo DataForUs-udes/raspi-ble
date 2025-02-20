@@ -1,7 +1,7 @@
 import dbus
 
 
-# ================== Gestion des événements de connexion/Déconnexion ===================
+# ================== paring/connection event manager ===================
 
 
 
@@ -9,34 +9,34 @@ def device_event(interface, changed, invalidated, path):
     if interface != "org.bluez.Device1":
         return
 
-    # Détection de connexion
+    #  Connection  detection
     if "Connected" in changed:
         if changed["Connected"]:
-            print(f"✅ Appareil connecté : {path}")
+            print(f"✅ Device connected : {path}")
         else:
-            print(f"❌ Appareil déconnecté : {path}")
+            print(f"❌ Device disconnected : {path}")
             get_disconnect_reason(path)
 
-    # Détection d'appariement
+    #  Pairing detection
     if "Paired" in changed:
         if changed["Paired"]:
-            print(f"🔐 Appariement réussi avec : {path}")
+            print(f"🔐 Pairing completed with : {path}")
         else:
-            print(f"🔓 Appariement annulé pour : {path}")
+            print(f"🔓 Pairing cancelled with : {path}")
 
 def get_disconnect_reason(device_path):
     try:
         bus = dbus.SystemBus()
         device = bus.get_object("org.bluez", device_path)
         iface = dbus.Interface(device, "org.freedesktop.DBus.Properties")
-        # Tentative d'accès à une propriété après déconnexion pour forcer une erreur
+        
         iface.Get("org.bluez.Device1", "RSSI")
     except dbus.DBusException as e:
-        print(f"⚠️ Raison de la déconnexion : {e.get_dbus_message()}")
+        print(f"⚠️ Deconnection reason : {e.get_dbus_message()}")
 
 def set_adapter_pairable():
     bus = dbus.SystemBus()
-    adapter_path = "/org/bluez/hci0"  # Remplace si nécessaire selon ton interface
+    adapter_path = "/org/bluez/hci0"  
     adapter = bus.get_object("org.bluez", adapter_path)
     adapter_props = dbus.Interface(adapter, "org.freedesktop.DBus.Properties")
 
@@ -44,6 +44,6 @@ def set_adapter_pairable():
         adapter_props.Set("org.bluez.Adapter1", "Powered", dbus.Boolean(1))
         adapter_props.Set("org.bluez.Adapter1", "Discoverable", dbus.Boolean(1))
         adapter_props.Set("org.bluez.Adapter1", "Pairable", dbus.Boolean(1))
-        print("L'adaptateur est maintenant pairable et visible.")
+        print("Adapter is now visible and connectable.")
     except dbus.DBusException as e:
-        print(f"Erreur lors de la configuration de l'adaptateur : {e.get_dbus_message()}")
+        print(f"Error while configuring adaptor : {e.get_dbus_message()}")

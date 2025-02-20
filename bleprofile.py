@@ -3,8 +3,14 @@ from advertisement import Advertisement
 from service import Application, Service, Characteristic, Descriptor
 from jsonutils import load_json_file, get_next_json_packet
 import logging
+import sys
+db_path = "/home/pi/StanForD-Parser/utils"
+sys.path.append(db_path)
+import db_utils
 
-NOTIFY_TIMEOUT = 500  # Temps en millisecondes (secondes)
+
+
+NOTIFY_TIMEOUT = 500  # Time in ms
 GATT_CHRC_IFACE = "org.bluez.GattCharacteristic1"
 
 class JsonAdvertisement(Advertisement):
@@ -29,12 +35,21 @@ class JsonCharacteristic(Characteristic):
         Characteristic.__init__(self, self.JSON_CHARACTERISTIC_UUID, ["notify", "read"], service)
         self.notifying = False
         self.add_descriptor(JsonDescriptor(self))
+        self.files_to_send = []
+        self.current_file = None
+        self.refresh_file_list()
+        self.recheck_timer = None
         self.prev_value = 0
+
+
+    def self.refresh_file_list(self):
+        ''' query on the bd to get all files to be sent (status == local) '''
+        self.files
 
     def set_json_callback(self):
         if self.notifying:
             value = get_next_json_packet()
-            if value != self.prev_value and value != 'FIN':
+            if value != self.prev_value and value != 'END':
                 self.PropertiesChanged(GATT_CHRC_IFACE, {"Value": value}, [])
                 self.add_timeout(NOTIFY_TIMEOUT, self.set_json_callback)
                 self.prev_value = value
@@ -44,18 +59,17 @@ class JsonCharacteristic(Characteristic):
         if self.notifying:
             return
 
-        print("Début du transfert du fichier JSON")
+        print("Starting file transfert")
         load_json_file()  # Recharge le fichier avant de commencer
         value = get_next_json_packet()
         self.notifying = True
         
         
-        #self.PropertiesChanged(GATT_CHRC_IFACE, {"Value": value}, [])
-        #self.add_timeout(NOTIFY_TIMEOUT, self.set_json_callback)
+
         self.set_json_callback()
 
     def StopNotify(self):
-        print("Arrêt du transfert du fichier JSON")
+        print(" Stopping file transfert")
         self.notifying = False
 
     def ReadValue(self, options):
@@ -64,12 +78,12 @@ class JsonCharacteristic(Characteristic):
 
 
 class DelFileFrom(Characteristic):
-    UUID = "19b10001-e8f2-537e-4f6c-d104768a1221"  # Remplace par ton propre UUID
+    UUID = "19b10001-e8f2-537e-4f6c-d104768a1221"  
 
     def __init__(self, service):
         Characteristic.__init__(
             self, self.UUID,
-            ["write","write-without-response"],  # Cette caractéristique accepte l'écriture
+            ["write","write-without-response"],  
             service
         )
 
@@ -77,30 +91,30 @@ class DelFileFrom(Characteristic):
         print("Receiving data from phone")
         print("raw value : ", value)
         byte_list = bytes(value)
-        byte_str = byte_list.decode('utf-8')  # Convertir en chaîne de caractères ASCII (si c'est du texte)
+        byte_str = byte_list.decode('utf-8')  # Convert to ascci string 
 
         try:
-            # Vérifier si les données reçues sont bien des chiffres
+            
             print(f"String reçu : {byte_str}")
             
-            # Si c'est un timestamp en texte (par exemple "1739206948381")
+            
             timestamp = int(byte_str)
             timestamp_seconds = timestamp / 1000
             dt_object = datetime.datetime.fromtimestamp(timestamp_seconds)
-            print(f"📥 Timestamp reçu : {dt_object.strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"📥 Timestamp received : {dt_object.strftime('%Y-%m-%d %H:%M:%S')}")
 
         except ValueError as e:
-            print(f"⚠️ Erreur lors de la conversion du timestamp : {e}")
+            print(f"⚠️ Error converting the timestamp : {e}")
 
 
 
 class ReceiveConfirmation(Characteristic):
-    UUID = "19b10001-e8f2-537e-4f6c-d104768a1218"  # Remplace par ton propre UUID
+    UUID = "19b10001-e8f2-537e-4f6c-d104768a1218"  
 
     def __init__(self, service):
         Characteristic.__init__(
             self, self.UUID,
-            ["write","write-without-response"],  # Cette caractéristique accepte l'écriture
+            ["write","write-without-response"],  # Writing char
             service
         )
 
@@ -108,13 +122,12 @@ class ReceiveConfirmation(Characteristic):
         print("Receiving file receive confirm from phone")
         print("raw value : ", value)
         byte_list = bytes(value)
-        byte_str = byte_list.decode('utf-8')  # Convertir en chaîne de caractères ASCII (si c'est du texte)
+        byte_str = byte_list.decode('utf-8')  # Convert as ASCII string
 
         try:
-            # Vérifier si les données reçues sont bien des chiffres
+            
             print(f"String reçu : {byte_str}")
             
-            # Si c'est un timestamp en texte (par exemple "1739206948381")
             
 
         except ValueError as e:
