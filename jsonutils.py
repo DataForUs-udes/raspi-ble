@@ -4,8 +4,6 @@ import dbus
 MAX_PACKET_SIZE = 185  # Max size of BLE packet
 json_packets = []
 json_index = 0
-
-
 def load_json_file():
     """Load and split the JSON file."""
     global json_packets, json_index
