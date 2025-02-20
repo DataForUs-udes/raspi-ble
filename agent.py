@@ -12,7 +12,6 @@ AGENT_IFACE = SERVICE_NAME + '.Agent1'
 ADAPTER_IFACE = SERVICE_NAME + ".Adapter1"
 DEVICE_IFACE = SERVICE_NAME + ".Device1"
 
-
 def getManagedObjects():
     bus = dbus.SystemBus()
     manager = dbus.Interface(bus.get_object("org.bluez", "/"), "org.freedesktop.DBus.ObjectManager")
