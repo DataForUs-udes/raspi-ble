@@ -17,7 +17,7 @@ def load_json_file():
 
         # Découpe en paquets de taille MAX_PACKET_SIZE
         json_packets = [data[i:i + MAX_PACKET_SIZE] for i in range(0, len(data), MAX_PACKET_SIZE)]
-        json_packets.append("FIN")  # Marqueur de fin de fichier
+        json_packets.append("END")  # Marqueur de fin de fichier
         print(f"Fichier JSON chargé ({len(json_packets)} paquets)")
     except Exception as e:
         print(f"Erreur lors du chargement du fichier JSON: {e}")
@@ -30,6 +30,6 @@ def get_next_json_packet():
         value = json_packets[json_index]
         json_index += 1
     else:
-        value = "FIN"  # Sécurité : envoie toujours la fin si dépassement
+        value = "END"  # Sécurité : envoie toujours la fin si dépassement
 
     return [dbus.Byte(ord(c)) for c in value]

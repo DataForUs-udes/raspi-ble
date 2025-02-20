@@ -1,6 +1,11 @@
 import dbus
 import dbus.mainloop.glib
+import logging
 
+LOG_LEVEL = logging.INFO
+LOG_LEVEL = logging.DEBUG
+LOG_FILE = "/dev/stdout"
+LOG_FORMAT = "%(asctime)s %(levelname)s [%(module)s] %(message)s"
 
 SERVICE_NAME = "org.bluez"
 AGENT_IFACE = SERVICE_NAME + '.Agent1'
@@ -93,7 +98,5 @@ class BlueAgent(dbus.service.Object):
     def startPairing(self):
         bus = dbus.SystemBus()
         adapter_path = findAdapter().object_path
-        adapter = dbus.Interface(bus.get_object(SERVICE_NAME, adapter_path), "org.freedesktop.DBus.Properties")
-#        adapter.Set(ADAPTER_IFACE, "Discoverable", True)
-        
+        adapter = dbus.Interface(bus.get_object(SERVICE_NAME, adapter_path), "org.freedesktop.DBus.Properties")        
         logging.info("BlueAgent is waiting to pair with device")
