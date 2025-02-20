@@ -56,8 +56,6 @@ class JsonCharacteristic(Characteristic):
         load_json_file()  # Recharge le fichier avant de commencer
         value = get_next_json_packet()
         self.notifying = True
-        
-        
 
         self.set_json_callback()
 
