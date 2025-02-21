@@ -1,8 +1,9 @@
 import dbus
-
+import subprocess
 
 # ================== paring/connection event manager ===================
 
+FLG_CONNECTED = False
 
 
 def device_event(interface, changed, invalidated, path):
@@ -13,9 +14,11 @@ def device_event(interface, changed, invalidated, path):
     if "Connected" in changed:
         if changed["Connected"]:
             print(f"✅ Device connected : {path}")
+            FLG_CONNECTED = True
         else:
             print(f"❌ Device disconnected : {path}")
             get_disconnect_reason(path)
+            FLG_CONNECTED = False
 
     #  Pairing detection
     if "Paired" in changed:
@@ -23,6 +26,8 @@ def device_event(interface, changed, invalidated, path):
             print(f"🔐 Pairing completed with : {path}")
         else:
             print(f"🔓 Pairing cancelled with : {path}")
+def get_connect_status():
+    return FLG_CONNECTED
 
 def get_disconnect_reason(device_path):
     try:
@@ -47,3 +52,5 @@ def set_adapter_pairable():
         print("Adapter is now visible and connectable.")
     except dbus.DBusException as e:
         print(f"Error while configuring adaptor : {e.get_dbus_message()}")
+
+

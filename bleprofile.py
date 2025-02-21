@@ -1,7 +1,7 @@
 from gi.repository import GLib
 from advertisement import Advertisement
 from service import Application, Service, Characteristic, Descriptor
-from jsonutils import load_json_file, get_next_json_packet
+from jsonutils import load_json_file, get_next_json_packet,restart_json_data
 import sys
 db_path = "/home/pi/StanForD-Parser/utils"
 sys.path.append(db_path)
@@ -21,22 +21,23 @@ class JsonAdvertisement(Advertisement):
 class JsonService(Service):
     JSON_SVC_UUID = "19b10000-e8f2-537e-4f6c-d104768a1214"
 
-    def __init__(self, index):
+    def __init__(self, index,queue):
         Service.__init__(self, index, self.JSON_SVC_UUID, True)
-        self.add_characteristic(JsonCharacteristic(self))
+        self.json_data_char = JsonCharacteristic(self,queue)
+        self.add_characteristic(self.json_data_char)
         self.add_characteristic(DelFileFrom(self))
         self.add_characteristic(ReceiveConfirmation(self))
+    def get_data_char(self):
+        return self.json_data_char
 
 class JsonCharacteristic(Characteristic):
     JSON_CHARACTERISTIC_UUID = "19b10001-e8f2-537e-4f6c-d104768a1217"
 
-    def __init__(self, service):
+    def __init__(self, service, queue):
         Characteristic.__init__(self, self.JSON_CHARACTERISTIC_UUID, ["notify", "read"], service)
         self.notifying = False
         self.add_descriptor(JsonDescriptor(self))
-        self.files_to_send = []
-        self.current_file = None
-        self.recheck_timer = None
+        self.q = queue # queue shared with filedetection.py to push files to transfert
         self.prev_value = 0
 
     def set_json_callback(self):
@@ -46,18 +47,35 @@ class JsonCharacteristic(Characteristic):
                 self.PropertiesChanged(GATT_CHRC_IFACE, {"Value": value}, [])
                 self.add_timeout(NOTIFY_TIMEOUT, self.set_json_callback)
                 self.prev_value = value
+            else:
+                if not self.q.empty():
+                    file = self.q.get()
+                    print(f"starting transfer of : {file}")
+                    load_json_file(file)
+                    self.set_json_callback()
+                else : 
+                    print("no more file to transfert in queue")
+                    self.StopNotify()
+        
+
         return self.notifying
 
     def StartNotify(self):
         if self.notifying:
             return
 
-        print("Starting file transfert")
-        load_json_file()  # Recharge le fichier avant de commencer
-        value = get_next_json_packet()
-        self.notifying = True
+       
+        if not self.q.empty():
+            file = self.q.get()
+            print(f"starting transfer of : {file}")
+            load_json_file(file)  # Recharge le fichier avant de commencer
+            value = get_next_json_packet()
+            self.notifying = True
+            self.set_json_callback()
+        else:
+            self.notifying = False
 
-        self.set_json_callback()
+        
 
     def StopNotify(self):
         print(" Stopping file transfert")

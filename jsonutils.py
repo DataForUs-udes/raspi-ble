@@ -4,13 +4,13 @@ import dbus
 MAX_PACKET_SIZE = 185  # Max size of BLE packet
 json_packets = []
 json_index = 0
-def load_json_file():
+def load_json_file(path):
     """Load and split the JSON file."""
     global json_packets, json_index
     json_index = 0
 
     try:
-        with open("json_test.json", "r") as file:
+        with open(path, "r") as file:
             data = file.read()
 
         # Slicing in MAX_SIZE packets
@@ -31,3 +31,7 @@ def get_next_json_packet():
         value = "END"  # Security : send END if we overflow
 
     return [dbus.Byte(ord(c)) for c in value]
+
+def restart_json_data():
+    json_packets = []
+    json_index = 0
