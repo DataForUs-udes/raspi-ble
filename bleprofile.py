@@ -21,14 +21,17 @@ class JsonAdvertisement(Advertisement):
 class JsonService(Service):
     JSON_SVC_UUID = "19b10000-e8f2-537e-4f6c-d104768a1214"
 
-    def __init__(self, index,queue):
+    def __init__(self, index,queue,ble_event):
         Service.__init__(self, index, self.JSON_SVC_UUID, True)
         self.json_data_char = JsonCharacteristic(self,queue)
         self.add_characteristic(self.json_data_char)
         self.add_characteristic(DelFileFrom(self))
-        self.add_characteristic(ReceiveConfirmation(self))
+        self.ble_event = ble_event
+        self.add_characteristic(ReceiveConfirmation(self,self.ble_event))
+        
     def get_data_char(self):
         return self.json_data_char
+
 
 class JsonCharacteristic(Characteristic):
     JSON_CHARACTERISTIC_UUID = "19b10001-e8f2-537e-4f6c-d104768a1217"
@@ -43,6 +46,7 @@ class JsonCharacteristic(Characteristic):
     def set_json_callback(self):
         if self.notifying:
             value = get_next_json_packet()
+            print("Val : ", value)
             if value != self.prev_value and value != 'END':
                 self.PropertiesChanged(GATT_CHRC_IFACE, {"Value": value}, [])
                 self.add_timeout(NOTIFY_TIMEOUT, self.set_json_callback)
@@ -101,26 +105,23 @@ class DelFileFrom(Characteristic):
         print("raw value : ", value)
         byte_list = bytes(value)
         byte_str = byte_list.decode('utf-8')  # Convert to ascci string 
-
+    
         try:
             
             print(f"String reçu : {byte_str}")
             
             
-            timestamp = int(byte_str)
-            timestamp_seconds = timestamp / 1000
-            dt_object = datetime.datetime.fromtimestamp(timestamp_seconds)
-            print(f"📥 Timestamp received : {dt_object.strftime('%Y-%m-%d %H:%M:%S')}")
-
+           
         except ValueError as e:
-            print(f"⚠️ Error converting the timestamp : {e}")
+            print(f"⚠️ Error getting the Delite command : {e}")
 
 
 
 class ReceiveConfirmation(Characteristic):
     UUID = "19b10001-e8f2-537e-4f6c-d104768a1218"  
 
-    def __init__(self, service):
+    def __init__(self, service,ble_event):
+        self.ble_event = ble_event
         Characteristic.__init__(
             self, self.UUID,
             ["write","write-without-response"],  # Writing char
@@ -128,10 +129,12 @@ class ReceiveConfirmation(Characteristic):
         )
 
     def WriteValue(self, value, options):
-        print("Receiving file receive confirm from phone")
-        print("raw value : ", value)
+        #print("Receiving file receive confirm from phone")
+        
+        #print("raw value : ", value)
         byte_list = bytes(value)
         byte_str = byte_list.decode('utf-8')  # Convert as ASCII string
+        
 
         try:
             

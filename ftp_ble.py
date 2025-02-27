@@ -3,17 +3,19 @@ import dbus.mainloop.glib
 from advertisement import Advertisement
 from service import Application
 from agent import BlueAgent
-from bleevents import device_event,get_disconnect_reason,set_adapter_pairable
+from bleevents import BluetoothEventManager
 from bleprofile import JsonAdvertisement, JsonService,JsonCharacteristic
 import queue
 from filedetection import FileWatcher
 
 # ================== Setting up the bus ===================
+
 # Initialisation of D-Bus to listen on hci0
 dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
 system_bus = dbus.SystemBus()
+ble_event = BluetoothEventManager()
 # Subscribing to protities changes events
-system_bus.add_signal_receiver(device_event,
+system_bus.add_signal_receiver(ble_event.device_event,
                                dbus_interface="org.freedesktop.DBus.Properties",
                                signal_name="PropertiesChanged",
                                path_keyword="path")
@@ -25,9 +27,9 @@ agent.registerAsDefault()
 agent.startPairing()
 # ====================== File Transfert ======================
 q = queue.Queue()
-json_service = JsonService(0,q)
+json_service = JsonService(0,q,ble_event)
 json_char = json_service.get_data_char()
-fw = FileWatcher(q,json_char)
+fw = FileWatcher(q,json_char,ble_event)
 fw.start()
 
 # ====================== BLE Application ======================

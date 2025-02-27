@@ -2,7 +2,7 @@ import sys
 import time
 import threading
 from queue import Queue
-from bleevents import get_connect_status
+from bleevents import BluetoothEventManager
 # Ajout du chemin pour db_utils
 db_path = "/home/pi/StanForD-Parser/utils"
 sys.path.append(db_path)
@@ -11,10 +11,11 @@ import db_utils  # Import après ajout du chemin
 CHECK_INTERVAL = 30  # Vérification toutes les X secondes
 
 class FileWatcher:
-    def __init__(self, queue, json_characteristic):
+    def __init__(self, queue, json_characteristic, ble_event):
         self.queue = queue
         self.json_characteristic = json_characteristic
         self.known_files = set()
+        self.ble_event = ble_event
 
     def check_for_new_files(self):
         """Vérifie si de nouveaux fichiers doivent être transférés."""
@@ -26,7 +27,7 @@ class FileWatcher:
             for file in new_files:
                 self.queue.put(file)  # Ajoute chaque fichier à la queue
             self.known_files = files  # Met à jour la liste des fichiers connus
-            if get_connect_status():
+            if self.ble_event.is_connected() == True:
                 self.json_characteristic.StartNotify()  # ⚡ Active notify car il y a des fichiers
             else:
                 print("no device connected, not setting notify up")

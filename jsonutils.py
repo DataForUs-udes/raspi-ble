@@ -26,6 +26,7 @@ def get_next_json_packet():
     global json_index
     if json_index < len(json_packets):
         value = json_packets[json_index]
+        #print("packet " , json_index, " data : ", value)
         json_index += 1
     else:
         value = "END"  # Security : send END if we overflow
